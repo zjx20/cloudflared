@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"golang.org/x/net/proxy"
 )
 
 // DialEdgeWithH2Mux makes a TLS connection to a Cloudflare edge node
@@ -25,7 +26,14 @@ func DialEdge(
 	if localIP != nil {
 		dialer.LocalAddr = &net.TCPAddr{IP: localIP, Port: 0}
 	}
-	edgeConn, err := dialer.DialContext(dialCtx, "tcp", edgeTCPAddr.String())
+	xd, _ := proxy.FromEnvironmentUsing(&dialer).(proxy.ContextDialer)
+	if xd == nil {
+		// Dialer returned by FromEnvironmentUsing() should always implement the
+		// ContextDialer interface (i.e. DialContext(ctx, ...)). If it doesn't,
+		// then fallback to the direct dialer.
+		xd = &dialer
+	}
+	edgeConn, err := xd.DialContext(dialCtx, "tcp", edgeTCPAddr.String())
 	if err != nil {
 		return nil, newDialError(err, "DialContext error")
 	}
